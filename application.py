@@ -6,8 +6,8 @@ import plotly.express as px
 
 from sklearn.compose import ColumnTransformer
 from sklearn.preprocessing import OneHotEncoder
-from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import Pipeline
+from xgboost import XGBClassifier
 
 # -----------------------------------
 # CONFIG
@@ -941,7 +941,7 @@ def train_model():
 
     pipe = Pipeline([
         ('preprocessor', preprocessor),
-        ('model', LogisticRegression(max_iter=1000))
+        ('model', XGBClassifier(n_estimators=100, learning_rate=0.1, max_depth=6, random_state=42))
     ])
 
     pipe.fit(X, y)
