@@ -6,8 +6,8 @@ import plotly.express as px
 
 from sklearn.compose import ColumnTransformer
 from sklearn.preprocessing import OneHotEncoder
-from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import Pipeline
+from xgboost import XGBClassifier
 
 # -----------------------------------
 # CONFIG
@@ -21,18 +21,11 @@ if "page" not in st.session_state:
     st.session_state.page = "Dashboard"
 if "last_prediction" not in st.session_state:
     st.session_state.last_prediction = None
-if "theme" not in st.session_state:
-    st.session_state.theme = "Dark"
-# -----------------------------------
-# 1. Theme State Setup
-if "theme" not in st.session_state:
-    st.session_state.theme = "Dark"
+if "prob_history" not in st.session_state:
+    st.session_state.prob_history = []
 
-# 2. Sidebar mein Toggle Button
-with st.sidebar:
-    is_light = st.toggle("☀️ Light Mode", value=(st.session_state.theme == "Light"))
-    st.session_state.theme = "Light" if is_light else "Dark"
-# LUXURY CSS
+# -----------------------------------
+# LUXURY CSS - RESPONSIVE DESIGN
 # -----------------------------------
 st.markdown("""
 <style>
@@ -827,7 +820,47 @@ team_data = {
     "Sunrisers Hyderabad": {
         "logo": "http://assets.designhill.com/design-blog/wp-content/uploads/2025/03/8-4.jpg",
         "abbr": "SRH", "color": "#f97316"
+    },
+    "Lucknow Super Giants": {
+        "logo": "https://1000logos.net/wp-content/uploads/2022/03/Lucknow-Super-Giants-Logo.png",
+        "abbr": "LSG",
+        "color": "#06b6d4"
+    },
+
+    "Gujarat Titans": {
+        "logo": "https://1000logos.net/wp-content/uploads/2022/03/Gujarat-Titans-Logo.png",
+        "abbr": "GT",
+        "color": "#1e293b"
+    },
+     "Deccan Chargers": {
+        "logo": "https://upload.wikimedia.org/wikipedia/en/7/70/DeccanChargersLogo.png",
+        "abbr": "DEC",
+        "color": "#2563eb"
+    },
+
+    "Pune Warriors India": {
+        "logo": "https://upload.wikimedia.org/wikipedia/en/4/46/Pune_Warriors_India_Logo.svg",
+        "abbr": "PWI",
+        "color": "#0f766e"
+    },
+
+    "Rising Pune Supergiant": {
+        "logo": "https://upload.wikimedia.org/wikipedia/en/f/f5/RisingPuneSupergiants.png",
+        "abbr": "RPS",
+        "color": "#7c3aed"
+    },
+    "Gujarat Lions": {
+        "logo": "https://upload.wikimedia.org/wikipedia/en/8/80/Gujarat_Lions.png",
+        "abbr": "GL",
+        "color": "#f59e0b"
+    },
+
+    "Kochi Tuskers Kerala": {
+        "logo": "https://upload.wikimedia.org/wikipedia/en/7/7e/Kochi_Tuskers_Kerala_Logo.png",
+        "abbr": "KTK",
+        "color": "#10b981"
     }
+
 }
 
 # -----------------------------------
@@ -840,10 +873,11 @@ def compute_win_rates():
 
     # Normalize team name aliases
     name_map = {
-        "Delhi Daredevils": "Delhi Capitals",
-        "Kings XI Punjab": "Punjab Kings",
-        "Royal Challengers Bengaluru": "Royal Challengers Bangalore",
-    }
+    "Delhi Daredevils": "Delhi Capitals",
+    "Kings XI Punjab": "Punjab Kings",
+    "Royal Challengers Bengaluru": "Royal Challengers Bangalore",
+    "Rising Pune Supergiants": "Rising Pune Supergiant"
+}
     matches["team1"] = matches["team1"].replace(name_map)
     matches["team2"] = matches["team2"].replace(name_map)
     matches["winner"] = matches["winner"].replace(name_map)
@@ -907,7 +941,7 @@ def train_model():
 
     pipe = Pipeline([
         ('preprocessor', preprocessor),
-        ('model', LogisticRegression(max_iter=1000))
+        ('model', XGBClassifier(n_estimators=100, learning_rate=0.1, max_depth=6, random_state=42))
     ])
 
     pipe.fit(X, y)
@@ -1019,8 +1053,8 @@ if st.session_state.page == "Dashboard":
     st.markdown("""
         <div class="stats-row">
             <div class="stat-pill">
-                <div class="stat-value">8</div>
-                <div class="stat-label">IPL Teams</div>
+<div class="stat-value">15</div>
+<div class="stat-label">IPL Teams</div>
             </div>
             <div class="stat-pill">
                 <div class="stat-value">ML</div>
@@ -1046,9 +1080,9 @@ if st.session_state.page == "Dashboard":
             <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: clamp(8px, 2vw, 12px);">
     """, unsafe_allow_html=True)
 
-    team_cols = st.columns(4)
+    team_cols = st.columns(5)
     for i, (team_name, tdata) in enumerate(team_data.items()):
-        with team_cols[i % 4]:
+        with team_cols[i % 5]:
             st.markdown(f"""
                 <div style="
                     background:rgba(255,255,255,0.025);
@@ -1088,11 +1122,11 @@ if st.session_state.page == "Dashboard":
         </div>
     """, unsafe_allow_html=True)
 
-    wr_cols = st.columns(4)
+    wr_cols = st.columns(5)
     for i, (team_name, tdata) in enumerate(team_data.items()):
         s = win_stats.get(team_name, {"wins": 0, "total": 0, "rate": 0})
         bar_pct = s["rate"]
-        with wr_cols[i % 4]:
+        with wr_cols[i % 5]:
             st.markdown(f"""
                 <div style="
                     background:rgba(255,255,255,0.025);
@@ -1435,112 +1469,23 @@ if st.session_state.page == "Analysis":
                 </div>
             </div>
         """, unsafe_allow_html=True)
-       # 3. Light Mode Override (Premium Faded Black & High Contrast Fix)
-if st.session_state.theme == "Light":
-    st.markdown("""
-    <style>
-    /* 1. Page Background: Blinding white ki jagah soft premium off-white */
-    [data-testid="stAppViewContainer"] { 
-        background-color: #F8FAFC !important; 
-        background-image: none !important; 
-    }
-    
-    /* 2. Sidebar Background: Depth dene ke liye thoda sa darker slate tone */
-    section[data-testid="stSidebar"] { 
-        background-color: #F1F5F9 !important; 
-        border-right: 1px solid #E2E8F0 !important;
-    }
-    
-    /* 3. Main Area Universal Reset: Sabhi custom classes ko stark black se "Faded Black (Slate)" kiya */
-    [data-testid="stAppViewContainer"] * {
-        color: #334155 !important; /* Beautiful faded charcoal black */
-        -webkit-text-fill-color: #334155 !important;
-        background-image: none !important;
-        background-clip: unset !important;
-    }
-    
-    /* Headings aur Main Title ko thoda zyada deep faded black kiya taaki hierarchy bani rahe */
-    [data-testid="stAppViewContainer"] h1, 
-    [data-testid="stAppViewContainer"] h2, 
-    [data-testid="stAppViewContainer"] h3,
-    h1, h2, h3, .main-title {
-        color: #1E293B !important; /* Deep faded charcoal */
-        -webkit-text-fill-color: #1E293B !important;
-        font-weight: 700 !important;
-    }
-    
-    /* 4. Sidebar Text Reset: Social links aur Arnav ki info ko readable muted black kiya */
-    section[data-testid="stSidebar"] * {
-        color: #475569 !important;
-        -webkit-text-fill-color: #475569 !important;
-        background-image: none !important;
-    }
-    
-    /* 5. Statistical Cards Styling: Safed backgrounds soft borders ke saath */
-    div[data-testid="stBlock"] {
-        background-color: #FFFFFF !important; 
-        border: 1px solid #E2E8F0 !important;
-        border-radius: 12px !important;
-        box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05) !important;
-        padding: 20px !important;
-    }
-    div[data-testid="stBlock"] * {
-        color: #1E293B !important;
-    }
-    /* Metrics ke bade numbers ko clear stand-out tone diya */
-    [data-testid="stMetricValue"] div {
-        color: #0F172A !important;
-    }
 
-    /* 6. Input Fields and Dropdowns: Ab background clean white hoga aur text faded black */
-    input, select, textarea, 
-    div[data-baseweb="input"], 
-    div[data-baseweb="select"],
-    div[data-baseweb="input"] > div {
-        background-color: #FFFFFF !important;
-        color: #1E293B !important;
-        border: 1px solid #CBD5E1 !important;
-        border-radius: 8px !important;
-    }
-    
-    /* Input box ke andar jab typing karoge toh text sahi dikhega */
-    div[data-baseweb="input"] * {
-        color: #1E293B !important;
-        -webkit-text-fill-color: #1E293B !important;
-    }
+        if len(st.session_state.prob_history) > 1:
+            st.markdown('<div style="height:24px;"></div>', unsafe_allow_html=True)
 
-    /* 7. Controls & Buttons: Number inputs ke side wale '+' aur '-' buttons */
-    button, button[pills="true"] {
-        background-color: #F8FAFC !important;
-        color: #334155 !important;
-        border: 1px solid #CBD5E1 !important;
-    }
-    button:hover {
-        background-color: #E2E8F0 !important;
-        color: #0F172A !important;
-    }
-    </style>
-    """, unsafe_allow_html=True)
+            fig = px.line(
+                x=list(range(1, len(st.session_state.prob_history)+1)),
+                y=st.session_state.prob_history,
+                labels={'x': 'Overs', 'y': 'Win Probability (%)'},
+                title="Win Probability Progression"
+            )
 
-    if "prob_history" not in st.session_state:
-        st.session_state.prob_history = []
-    
-    if len(st.session_state.prob_history) > 1:
-        st.markdown('<div style="height:24px;"></div>', unsafe_allow_html=True)
+            fig.update_layout(
+                template="plotly_dark",
+                plot_bgcolor="#080808",
+                paper_bgcolor="#080808",
+                font=dict(color="#e2dfd8")
+            )
 
-        fig = px.line(
-            x=list(range(1, len(st.session_state.prob_history)+1)),
-            y=st.session_state.prob_history,
-            labels={'x': 'Overs', 'y': 'Win Probability (%)'},
-            title="Win Probability Progression"
-        )
-
-        fig.update_layout(
-            template="plotly_dark",
-            plot_bgcolor="#080808",
-            paper_bgcolor="#080808",
-            font=dict(color="#e2dfd8")
-        )
-
-        st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, use_container_width=True)
     st.markdown('</div>', unsafe_allow_html=True)  # close main-pad
