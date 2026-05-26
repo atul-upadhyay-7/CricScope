@@ -823,7 +823,7 @@ def train_model():
     total_df.rename(columns={'total_runs': 'target'}, inplace=True)
 
     df = df.merge(total_df, on='match_id')
-    df = df[df['inning'] == 2]
+    df = df[df['inning'] == 2].copy()
 
     df['current_score'] = df.groupby('match_id')['total_runs'].cumsum()
     df['runs_left'] = df['target'] - df['current_score']
@@ -845,14 +845,16 @@ def train_model():
     # Correct required run rate (rrr) avoiding division by zero when balls_left is 0
     df['rrr'] = np.where(df['balls_left'] > 0, (df['runs_left'] * 6) / df['balls_left'], 0.0)
 
-    df.replace([np.inf, -np.inf], np.nan, inplace=True)
+    df = df.replace([np.inf, -np.inf], np.nan)
 
     df['result'] = np.where(df['batting_team'] == df['winner'], 1, 0)
 
     final_df = df[['batting_team', 'bowling_team', 'city',
                    'runs_left', 'balls_left', 'wickets',
                    'target', 'crr', 'rrr', 'result']]
-    final_df.dropna(inplace=True)
+    final_df = final_df.dropna()
+
+    assert not final_df.isin([np.inf, -np.inf]).any().any(), "inf detected in training data"
 
     X = final_df.drop('result', axis=1)
     y = final_df['result']
@@ -1182,6 +1184,9 @@ if st.session_state.page == "Analysis":
                 lose = 1.0
             else:
                 proba = pipe.predict_proba(input_df)[0]
+                if np.isnan(proba).any():
+                    st.error("Model returned invalid probabilities. The training data may contain corrupted values. Please reload the application.")
+                    st.stop()
                 win = proba[1]
                 lose = proba[0]
 
