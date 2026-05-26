@@ -2,6 +2,8 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import time
+import os
+import joblib
 
 from sklearn.compose import ColumnTransformer
 from sklearn.preprocessing import OneHotEncoder
@@ -813,7 +815,15 @@ team_data = {
 # MODEL
 # -----------------------------------
 @st.cache_resource
-def train_model():
+def train_model(matches_mtime: float, deliveries_mtime: float):
+    if os.path.exists("pipe.pkl"):
+        try:
+            data = joblib.load("pipe.pkl")
+            m_mtime, d_mtime, seasons, p = data
+            if m_mtime == matches_mtime and d_mtime == deliveries_mtime:
+                return p, seasons
+        except Exception:
+            pass
     matches = pd.read_csv("matches.csv")
     deliveries = pd.read_csv("deliveries.csv")
 
@@ -827,9 +837,6 @@ def train_model():
 
     df['current_score'] = df.groupby('match_id')['total_runs'].cumsum()
     df['runs_left'] = df['target'] - df['current_score']
-    # Correct balls_left calculation using legal deliveries bowled:
-    # balls_bowled = ((over - 1) * 6) + ball
-    # and ensuring it is never negative.
     balls_bowled = ((df['over'] - 1) * 6) + df['ball']
     df['balls_left'] = (120 - balls_bowled).clip(lower=0)
 
@@ -837,12 +844,9 @@ def train_model():
     df['wickets'] = df.groupby('match_id')['player_dismissed'].cumsum()
     df['wickets'] = 10 - df['wickets']
 
-    # Correct current run rate (crr) using correct overs bowled denominator:
-    # (over - 1) + (ball / 6)
     overs_bowled = (df['over'] - 1) + (df['ball'] / 6)
     df['crr'] = np.where(overs_bowled > 0, df['current_score'] / overs_bowled, 0.0)
 
-    # Correct required run rate (rrr) avoiding division by zero when balls_left is 0
     df['rrr'] = np.where(df['balls_left'] > 0, (df['runs_left'] * 6) / df['balls_left'], 0.0)
 
     df.replace([np.inf, -np.inf], np.nan, inplace=True)
@@ -868,9 +872,14 @@ def train_model():
     ])
 
     pipe.fit(X, y)
-    return pipe
 
-pipe = train_model()
+    seasons = sorted(matches['Season'].unique())
+    joblib.dump((matches_mtime, deliveries_mtime, seasons, pipe), "pipe.pkl")
+    return pipe, seasons
+
+matches_mtime = os.path.getmtime("matches.csv")
+deliveries_mtime = os.path.getmtime("deliveries.csv")
+pipe, model_seasons = train_model(matches_mtime, deliveries_mtime)
 
 # -----------------------------------
 # SIDEBAR
@@ -891,6 +900,15 @@ with st.sidebar:
     if st.button("◉  Match Analysis", key="nav_analysis"):
         st.session_state.page = "Analysis"
 
+    st.markdown('<div style="height:1px; background:rgba(212,175,55,0.08); margin:20px 0;"></div>', unsafe_allow_html=True)
+    st.markdown('<div class="sidebar-section-label">Model</div>', unsafe_allow_html=True)
+    seasons_str = f"{model_seasons[0]} to {model_seasons[-1]}" if model_seasons else "Unknown"
+    st.caption(f"Trained on {seasons_str}")
+    if st.button("⟳  Retrain Model", key="retrain"):
+        if os.path.exists("pipe.pkl"):
+            os.remove("pipe.pkl")
+        st.cache_resource.clear()
+        st.rerun()
     st.markdown('<div style="height:1px; background:rgba(212,175,55,0.08); margin:20px 0;"></div>', unsafe_allow_html=True)
     st.markdown('<div class="sidebar-section-label">Built By</div>', unsafe_allow_html=True)
 
