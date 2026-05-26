@@ -872,6 +872,63 @@ def train_model():
 
 pipe = train_model()
 
+def generate_ball_by_ball_df(pipe, batting_team, bowling_team, selected_city, target, score, overs, wickets):
+    total_balls = int(overs * 6)
+    if total_balls == 0:
+        data = {
+            'over': [0],
+            'ball': [0],
+            'batting_team_prob': [0.5],
+            'bowling_team_prob': [0.5]
+        }
+        return pd.DataFrame(data)
+
+    records = []
+    for b in range(1, total_balls + 1):
+        curr_over = (b - 1) // 6 + 1
+        curr_ball = (b - 1) % 6 + 1
+        
+        fraction = b / total_balls
+        curr_score = int(score * fraction)
+        curr_wickets = int(wickets * fraction)
+        
+        runs_left = target - curr_score
+        balls_left = max(120 - b, 0)
+        crr = curr_score / (b / 6) if b > 0 else 0.0
+        rrr = (runs_left * 6) / balls_left if balls_left > 0 else 0.0
+        
+        input_df = pd.DataFrame({
+            'batting_team': [batting_team],
+            'bowling_team': [bowling_team],
+            'city': [selected_city],
+            'runs_left': [runs_left],
+            'balls_left': [balls_left],
+            'wickets': [10 - curr_wickets],
+            'target': [target],
+            'crr': [crr],
+            'rrr': [rrr]
+        })
+        
+        if runs_left <= 0:
+            win = 1.0
+            lose = 0.0
+        elif balls_left <= 0:
+            win = 0.0
+            lose = 1.0
+        else:
+            proba = pipe.predict_proba(input_df)[0]
+            win = proba[1]
+            lose = proba[0]
+            
+        records.append({
+            'over': curr_over,
+            'ball': curr_ball,
+            'batting_team_prob': round(win, 4),
+            'bowling_team_prob': round(lose, 4)
+        })
+        
+    return pd.DataFrame(records)
+
 # -----------------------------------
 # SIDEBAR
 # -----------------------------------
@@ -1296,5 +1353,23 @@ if st.session_state.page == "Analysis":
                 </div>
             </div>
         """, unsafe_allow_html=True)
+
+        st.markdown('<div style="height:20px;"></div>', unsafe_allow_html=True)
+        
+        # Generate ball-by-ball predictions for export
+        with st.spinner("Generating export data..."):
+            export_df = generate_ball_by_ball_df(
+                pipe, batting_team, bowling_team, selected_city,
+                target, score, overs, wickets
+            )
+            csv_data = export_df.to_csv(index=False)
+        
+        st.download_button(
+            label="📊 Download Ball-by-Ball Prediction Data (CSV)",
+            data=csv_data,
+            file_name=f"cricscope_predictions_{batting_team.lower().replace(' ', '_')}.csv",
+            mime="text/csv",
+            use_container_width=True
+        )
 
     st.markdown('</div>', unsafe_allow_html=True)  # close main-pad
